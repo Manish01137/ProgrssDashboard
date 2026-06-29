@@ -17,7 +17,10 @@ import type { Habit, HabitEntry } from "@/types";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+// gemini-2.5-flash has usable quota on this account; 2.0-flash returned
+// free-tier "limit: 0". Auth via ?key= query param (the header form 404'd
+// for 2.5 models).
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 export async function POST() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -82,16 +85,18 @@ Write a SHORT review (about 120-160 words, plain text, no markdown headers) with
 Be direct and motivating, like a war-room briefing. Reference real numbers from the data. Don't invent data that isn't there.`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+          // Disable "thinking" so the short review isn't slow / token-heavy.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     });
 
