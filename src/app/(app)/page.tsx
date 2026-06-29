@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CountdownBanner } from "@/components/CountdownBanner";
+import { GoalBanner } from "@/components/GoalBanner";
+import { Onboarding } from "@/components/Onboarding";
+import { TodayRing } from "@/components/TodayRing";
 import { DayNavigator } from "@/components/DayNavigator";
 import { HabitCard } from "@/components/HabitCard";
 import { FocusTimer } from "@/components/FocusTimer";
+import { useToast } from "@/components/Toast";
+import { bigConfetti, popConfetti, haptic } from "@/lib/celebrate";
 import {
   activeHabits,
   buildEntryIndex,
@@ -20,12 +24,21 @@ import { useDashboard } from "@/lib/useDashboard";
 import { Flame, Snowflake, Check, Cloud, CloudOff, Moon } from "lucide-react";
 
 export default function HomePage() {
-  const { loading, habits, entries, profile, saveEntry, logFocus } =
-    useDashboard();
+  const {
+    loading,
+    habits,
+    entries,
+    profile,
+    saveEntry,
+    logFocus,
+    updateGoal,
+  } = useDashboard();
+  const toast = useToast();
   const [date, setDate] = useState(todayStr());
   const [values, setValues] = useState<Record<string, number>>({});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const perfectRef = useRef<boolean | null>(null);
 
   const idx = useMemo(() => buildEntryIndex(entries), [entries]);
   const active = useMemo(() => activeHabits(habits), [habits]);
@@ -34,26 +47,40 @@ export default function HomePage() {
     [active, date],
   );
 
-  // Sync local editable values from stored entries when date/data changes.
   useEffect(() => {
     const next: Record<string, number> = {};
     for (const h of active) next[h.id] = valueFor(idx, h.id, date);
     setValues(next);
     setSaveState("idle");
+    perfectRef.current = null; // reset perfect-day detector on date/data change
   }, [idx, active, date]);
 
   function update(habitId: string, value: number) {
+    const habit = active.find((h) => h.id === habitId);
+    const wasDone = habit ? isDone(habit, values[habitId] ?? 0, date) : false;
+    const nowDone = habit ? isDone(habit, value, date) : false;
+
     setValues((v) => ({ ...v, [habitId]: value }));
+
+    if (!wasDone && nowDone) {
+      haptic(15);
+      popConfetti();
+    }
+
     setSaveState("saving");
     if (timers.current[habitId]) clearTimeout(timers.current[habitId]);
     timers.current[habitId] = setTimeout(async () => {
-      await saveEntry(habitId, date, value);
-      setSaveState("saved");
-      setTimeout(() => setSaveState("idle"), 1200);
+      try {
+        await saveEntry(habitId, date, value);
+        setSaveState("saved");
+        setTimeout(() => setSaveState("idle"), 1200);
+      } catch {
+        setSaveState("idle");
+        toast.error("Couldn't save — check your connection.");
+      }
     }, 500);
   }
 
-  // Overall streak = consecutive perfect days (freeze-bridged).
   const perfectDates = useMemo(() => {
     const set = new Set<string>();
     const dates = new Set(entries.map((e) => e.log_date));
@@ -62,7 +89,6 @@ export default function HomePage() {
   }, [entries, active, idx]);
   const streak = computeStreak(perfectDates, profile?.freeze_tokens ?? 0);
 
-  // Live aggregate for the selected day using local (unsaved) values.
   const liveIdx = useMemo(() => {
     const m = new Map(idx);
     for (const [hid, v] of Object.entries(values)) m.set(`${hid}|${date}`, v);
@@ -70,11 +96,45 @@ export default function HomePage() {
   }, [idx, values, date]);
   const agg = dayAgg(active, liveIdx, date);
 
+  // Celebrate the moment the day becomes perfect.
+  useEffect(() => {
+    if (loading) return;
+    const wasPerfect = perfectRef.current;
+    if (wasPerfect === null) {
+      perfectRef.current = agg.perfect;
+      return;
+    }
+    if (!wasPerfect && agg.perfect && agg.total > 0) {
+      bigConfetti();
+      haptic(40);
+      toast.success("⚡ Perfect day locked in. +30 XP bonus!");
+    }
+    perfectRef.current = agg.perfect;
+  }, [agg.perfect, agg.total, loading, toast]);
+
   if (loading) return <SkeletonHome />;
+
+  const needsOnboarding = profile !== null && !profile.goal;
 
   return (
     <div className="space-y-4">
-      <CountdownBanner />
+      {needsOnboarding && (
+        <Onboarding
+          onComplete={async (goal, goalDate) => {
+            await updateGoal(goal, goalDate);
+            toast.success("Mission locked in. Let's go. 🔥");
+          }}
+        />
+      )}
+
+      <GoalBanner goal={profile?.goal} goalDate={profile?.goal_date} />
+
+      <TodayRing
+        doneCount={agg.doneCount}
+        total={agg.total}
+        perfect={agg.perfect}
+        xp={agg.xp}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <div className="surface flex items-center gap-3 px-4 py-3">
@@ -106,30 +166,15 @@ export default function HomePage() {
 
       <div className="surface px-4 py-3">
         <DayNavigator date={date} onChange={setDate} />
-        <div className="mt-3 flex items-center justify-between border-t border-neutral-200 pt-3 dark:border-neutral-800">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold">
-              {agg.doneCount}/{agg.total} habits
-            </span>
-            {agg.perfect && (
-              <span className="animate-pop rounded-full bg-ember-500/15 px-2 py-0.5 text-xs font-bold text-ember-500">
-                ⚡ Perfect day +30
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-neutral-500">
-            <span className="font-bold text-ember-500">{agg.xp} XP</span>
-            <SaveIndicator state={saveState} />
-          </div>
+        <div className="mt-3 flex items-center justify-end border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <SaveIndicator state={saveState} />
         </div>
       </div>
 
-      {/* Focus timer — only meaningful for the current day */}
       {date === todayStr() && (
         <FocusTimer habits={active} onComplete={logFocus} />
       )}
 
-      {/* Habit cards (only those scheduled for this day) */}
       {scheduled.length === 0 ? (
         <div className="surface flex flex-col items-center px-4 py-10 text-center text-sm text-neutral-500">
           <Moon className="mb-2 h-6 w-6" />
@@ -156,18 +201,18 @@ export default function HomePage() {
 function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" }) {
   if (state === "saving")
     return (
-      <span className="flex items-center gap-1 text-neutral-400">
+      <span className="flex items-center gap-1 text-xs text-neutral-400">
         <Cloud className="h-3.5 w-3.5 animate-pulse" /> Saving
       </span>
     );
   if (state === "saved")
     return (
-      <span className="flex items-center gap-1 text-emerald-500">
+      <span className="flex items-center gap-1 text-xs text-emerald-500">
         <Check className="h-3.5 w-3.5" /> Saved
       </span>
     );
   return (
-    <span className="flex items-center gap-1 text-neutral-400">
+    <span className="flex items-center gap-1 text-xs text-neutral-400">
       <CloudOff className="h-3.5 w-3.5" /> Synced
     </span>
   );
@@ -177,11 +222,12 @@ function SkeletonHome() {
   return (
     <div className="space-y-4">
       <div className="surface h-16 animate-pulse" />
+      <div className="surface h-32 animate-pulse" />
       <div className="grid grid-cols-2 gap-3">
         <div className="surface h-16 animate-pulse" />
         <div className="surface h-16 animate-pulse" />
       </div>
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="surface h-24 animate-pulse" />
       ))}
     </div>

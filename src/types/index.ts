@@ -48,6 +48,8 @@ export interface Profile {
   id: string;
   email: string | null;
   freeze_tokens: number;
+  goal: string | null;
+  goal_date: string | null; // YYYY-MM-DD
 }
 
 export type ProjectStatus = "active" | "in_progress" | "done" | "paused";

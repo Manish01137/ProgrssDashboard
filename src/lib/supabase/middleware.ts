@@ -5,7 +5,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// API routes are listed here so the middleware never *redirects* them to
+// /login — they authenticate themselves (cookie session or the cron Bearer
+// secret) and return 401 when needed. Session cookies are still refreshed.
+const PUBLIC_PATHS = ["/login", "/auth", "/api"];
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });

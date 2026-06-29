@@ -20,6 +20,7 @@ interface DashboardState {
   updateHabit: (id: string, patch: Partial<Habit>) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
   setFreezeTokens: (n: number) => Promise<void>;
+  updateGoal: (goal: string, goalDate: string | null) => Promise<void>;
   logFocus: (habitId: string | null, minutes: number, addValue: number) => Promise<void>;
 }
 
@@ -164,6 +165,20 @@ export function useDashboard(): DashboardState {
     [supabase, userId],
   );
 
+  const updateGoal = useCallback(
+    async (goal: string, goalDate: string | null) => {
+      if (!userId) return;
+      const { data } = await supabase
+        .from("profiles")
+        .update({ goal, goal_date: goalDate })
+        .eq("id", userId)
+        .select()
+        .single();
+      if (data) setProfile(data as Profile);
+    },
+    [supabase, userId],
+  );
+
   const logFocus = useCallback(
     async (habitId: string | null, minutes: number, addValue: number) => {
       if (!userId) return;
@@ -200,6 +215,7 @@ export function useDashboard(): DashboardState {
     updateHabit,
     deleteHabit,
     setFreezeTokens,
+    updateGoal,
     logFocus,
   };
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useDashboard } from "@/lib/useDashboard";
 import { StatsCards } from "@/components/StatsCards";
 import { WeeklyReview } from "@/components/WeeklyReview";
+import { Insights } from "@/components/Insights";
 import { Heatmap } from "@/components/Heatmap";
 import { Charts } from "@/components/Charts";
 import { Badges } from "@/components/Badges";
@@ -43,6 +44,7 @@ export default function StatsPage() {
       <h1 className="text-xl font-bold tracking-tight">Command Center</h1>
       <StatsCards habits={habits} entries={entries} profile={profile} />
       <WeeklyReview />
+      <Insights habits={habits} entries={entries} />
       <Heatmap habits={habits} entries={entries} />
       <Charts habits={habits} entries={entries} />
       <Badges habits={habits} entries={entries} totalEarnings={earnings} />

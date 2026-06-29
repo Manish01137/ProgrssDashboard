@@ -53,3 +53,35 @@ self.addEventListener("fetch", (event) => {
     caches.match(request).then((cached) => cached || fetch(request)),
   );
 });
+
+// ── Web Push: daily reminders ───────────────────────────────────────────────
+self.addEventListener("push", (event) => {
+  let data = { title: "War Room", body: "Time to log your day.", url: "/" };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    /* keep defaults */
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      data: { url: data.url || "/" },
+      vibrate: [80, 40, 80],
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    }),
+  );
+});

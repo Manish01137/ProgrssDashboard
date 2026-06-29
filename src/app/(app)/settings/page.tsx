@@ -1,6 +1,7 @@
 "use client";
 
 import { HabitEditor } from "@/components/HabitEditor";
+import { ReminderToggle } from "@/components/ReminderToggle";
 
 export default function SettingsPage() {
   return (
@@ -12,6 +13,7 @@ export default function SettingsPage() {
           scheduled.
         </p>
       </div>
+      <ReminderToggle />
       <HabitEditor />
     </div>
   );

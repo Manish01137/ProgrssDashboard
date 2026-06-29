@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, Snowflake } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Snowflake, Target } from "lucide-react";
 import { WEEKDAYS, ALL_DAYS } from "@/lib/habits";
 import { useDashboard } from "@/lib/useDashboard";
+import { useToast } from "@/components/Toast";
 import type { Habit, HabitDraft, HabitType } from "@/types";
 
 const BLANK: HabitDraft = {
@@ -28,7 +29,9 @@ export function HabitEditor() {
     updateHabit,
     deleteHabit,
     setFreezeTokens,
+    updateGoal,
   } = useDashboard();
+  const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -44,6 +47,16 @@ export function HabitEditor() {
 
   return (
     <div className="space-y-4">
+      {/* Mission / north-star goal */}
+      <GoalEditor
+        goal={profile?.goal ?? ""}
+        goalDate={profile?.goal_date ?? ""}
+        onSave={async (g, d) => {
+          await updateGoal(g, d || null);
+          toast.success("Mission updated.");
+        }}
+      />
+
       {/* Freeze tokens control */}
       <div className="surface flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
@@ -83,6 +96,7 @@ export function HabitEditor() {
               onSubmit={async (draft) => {
                 await updateHabit(habit.id, draft);
                 setEditingId(null);
+                toast.success("Habit saved.");
               }}
             />
           ) : (
@@ -112,8 +126,12 @@ export function HabitEditor() {
                 type="button"
                 aria-label="Delete"
                 onClick={() => {
-                  if (confirm(`Delete "${habit.name}"? Its history is removed too.`))
+                  if (
+                    confirm(`Delete "${habit.name}"? Its history is removed too.`)
+                  ) {
                     deleteHabit(habit.id);
+                    toast.success("Habit removed.");
+                  }
                 }}
                 className="text-neutral-400 transition hover:text-red-500"
               >
@@ -133,6 +151,7 @@ export function HabitEditor() {
           onSubmit={async (draft) => {
             await createHabit(draft);
             setAdding(false);
+            toast.success("Habit added.");
           }}
         />
       ) : (
@@ -224,6 +243,7 @@ function HabitForm({
 
       <div className="flex gap-2">
         <select
+          aria-label="Habit type"
           value={type}
           onChange={(e) => setType(e.target.value as HabitType)}
           className="flex-1 rounded-lg border border-neutral-200 bg-transparent px-2 py-2 text-sm outline-none focus:border-ember-500 dark:border-neutral-800"
@@ -318,6 +338,52 @@ function HabitForm({
           className="flex items-center justify-center gap-1 rounded-lg border border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-800"
         >
           <X className="h-4 w-4" /> Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GoalEditor({
+  goal,
+  goalDate,
+  onSave,
+}: {
+  goal: string;
+  goalDate: string;
+  onSave: (goal: string, goalDate: string) => Promise<void>;
+}) {
+  const [g, setG] = useState(goal);
+  const [d, setD] = useState(goalDate);
+  const dirty = g !== goal || d !== goalDate;
+
+  return (
+    <div className="surface px-4 py-4">
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-bold">
+        <Target className="h-4 w-4 text-ember-500" /> Your Mission
+      </h2>
+      <input
+        aria-label="Goal"
+        value={g}
+        onChange={(e) => setG(e.target.value)}
+        placeholder="Your north-star goal"
+        className="w-full rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-ember-500 dark:border-neutral-800"
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="date"
+          aria-label="Target date"
+          value={d}
+          onChange={(e) => setD(e.target.value)}
+          className="flex-1 rounded-lg border border-neutral-200 bg-transparent px-3 py-2 text-sm outline-none focus:border-ember-500 dark:border-neutral-800"
+        />
+        <button
+          type="button"
+          disabled={!dirty || !g.trim()}
+          onClick={() => onSave(g.trim(), d)}
+          className="rounded-lg bg-ember-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ember-600 disabled:opacity-50"
+        >
+          Save
         </button>
       </div>
     </div>
